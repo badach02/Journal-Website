@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+    <head>
+        <title>Top 300 Ranked Players</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background: #0f172a;
+                color: white;
+                margin: 0;
+                padding: 20px;
+            }
+
+            h1 {
+                text-align: center;
+            }
+
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 20px;
+            }
+
+            th,
+            td {
+                padding: 10px;
+                border-bottom: 1px solid #334155;
+                text-align: left;
+            }
+
+            th {
+                background: #1e293b;
+            }
+
+            tr:hover {
+                background: #1e293b;
+            }
+
+            .lp {
+                font-weight: bold;
+                color: #38bdf8;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>🏆 Top 300 Ranked Players</h1>
+
+        <table>
+            <tr>
+                <th>Rank</th>
+                <th>Summoner ID</th>
+                <th>League Points</th>
+                <th>Wins</th>
+                <th>Losses</th>
+            </tr>
+
+            {% for player in players %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ player.summonerId }}</td>
+                <td class="lp">{{ player.leaguePoints }}</td>
+                <td>{{ player.wins }}</td>
+                <td>{{ player.losses }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </body>
+</html>
