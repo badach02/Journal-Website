@@ -7,7 +7,11 @@
     <div>
         <p class="eyebrow">WoW Mythic+ Tracker</p>
         <h1>{{ profile.name }}</h1>
-        <p class="hero-copy">{{ profile.realm }} ({{ profile.region }}) • {{ profile.active_spec_name or 'Spec not available' }} • Mythic+ Score: {{ profile.score or 'N/A' }}</p>
+        <p class="hero-copy">{{ profile.realm }} ({{ profile.region }}) • {{ profile.active_spec_name or 'Spec not available' }}</p>
+        <div class="stat-row">
+            <span class="stat-label">Mythic+ Score</span>
+            <span class="stat-value">{{ profile.score if profile.score is not none else 'N/A' }}</span>
+        </div>
     </div>
     <div class="hero-actions">
         <a class="button button-secondary" href="{{ url_for('top300') }}">View Top 300</a>

@@ -20,7 +20,16 @@ session = requests.Session()
 
 def fetch_league(url):
     data = fetch_json(url, headers=HEADERS)
-    return data.get("entries", []) if isinstance(data, dict) else []
+    entries = data.get("entries", []) if isinstance(data, dict) else []
+    tier = data.get("tier")
+
+    for entry in entries:
+        if tier and not entry.get("tier"):
+            entry["tier"] = tier
+        if not entry.get("summonerName"):
+            entry["summonerName"] = entry.get("summonerId")
+
+    return entries
 
 
 def get_top_300(region=REGION):
@@ -165,7 +174,7 @@ def get_weekly_runs(region, realm, name):
         "region": region,
         "realm": realm,
         "name": name,
-        "fields": "mythic_plus_recent_runs,mythic_plus_scores"
+        "fields": "mythic_plus_recent_runs,mythic_plus_scores,mythic_plus_scores_by_season:season-mn-1,mythic_plus_best_runs,mythic_plus_current_week_runs,mythic_plus_highest_level"
     }
 
     data = fetch_json(url, params=params)
@@ -177,9 +186,43 @@ def get_weekly_runs(region, realm, name):
         "region": data.get("region", region),
         "class": data.get("class"),
         "active_spec_name": data.get("active_spec_name"),
-        "score": data.get("mythic_plus_scores", {}).get("all", {}).get("score"),
+        "score": None,
         "thumbnail_url": data.get("thumbnail_url"),
     }
+
+    def extract_score(source):
+        if source is None:
+            return None
+        if isinstance(source, dict):
+            if "score" in source and source.get("score") is not None:
+                return source.get("score")
+            if "scores" in source and isinstance(source.get("scores"), dict):
+                all_score = source["scores"].get("all")
+                if all_score is not None:
+                    return all_score
+            for value in source.values():
+                if isinstance(value, (dict, list)):
+                    score = extract_score(value)
+                    if score is not None:
+                        return score
+            return None
+        elif isinstance(source, list):
+            for item in source:
+                score = extract_score(item)
+                if score is not None:
+                    return score
+        return None
+
+    score_data = data.get("mythic_plus_scores") or {}
+    season_data = data.get("mythic_plus_scores_by_season") or {}
+    profile["score"] = (
+        extract_score(score_data)
+        or extract_score(season_data)
+        or extract_score(data.get("mythic_plus_scores_by_season", {}))
+        or data.get("mythic_plus_score")
+        or data.get("mythic_plus_current_week_score")
+        or data.get("mythic_plus_season_score")
+    )
 
     one_week_ago = datetime.utcnow() - timedelta(days=7)
     filtered = []

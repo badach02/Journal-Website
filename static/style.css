@@ -17,6 +17,7 @@ body {
     display: flex;
     justify-content: center;
     padding: 24px;
+    min-height: 100vh;
 }
 
 .page-shell {
@@ -125,6 +126,30 @@ body {
     gap: 14px;
 }
 
+.stat-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    width: fit-content;
+}
+
+.stat-label {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #9ad0ff;
+    font-size: 0.8rem;
+}
+
+.stat-value {
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
 .button {
     display: inline-flex;
     align-items: center;
@@ -159,6 +184,7 @@ body {
     display: grid;
     gap: 24px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
 }
 
 .feature-card,
@@ -247,6 +273,7 @@ body {
 
 .table-wrapper {
     overflow-x: auto;
+    padding-bottom: 10px;
 }
 
 table {
@@ -295,6 +322,7 @@ td {
     display: flex;
     gap: 20px;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .profile-card img {
