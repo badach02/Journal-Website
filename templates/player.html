@@ -1,50 +1,65 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>{{ name }} - Weekly Keys</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
+{% extends 'base.html' %}
 
-<body>
+{% block title %}{{ profile.name }} - Weekly Keys{% endblock %}
 
-<nav>
-    <a href="/">Home</a>
-</nav>
+{% block content %}
+<section class="hero hero-compact">
+    <div>
+        <p class="eyebrow">WoW Mythic+ Tracker</p>
+        <h1>{{ profile.name }}</h1>
+        <p class="hero-copy">{{ profile.realm }} ({{ profile.region }}) • {{ profile.active_spec_name or 'Spec not available' }} • Mythic+ Score: {{ profile.score or 'N/A' }}</p>
+    </div>
+    <div class="hero-actions">
+        <a class="button button-secondary" href="{{ url_for('top300') }}">View Top 300</a>
+        <a class="button button-secondary" href="{{ url_for('index') }}">Search another char</a>
+    </div>
+</section>
 
-<h1>
-    {{ name | capitalize }} - Weekly Mythic+ Runs
-</h1>
+{% if profile.thumbnail_url %}
+<section class="profile-card profile-summary">
+    <img src="{{ profile.thumbnail_url }}" alt="{{ profile.name }} thumbnail" />
+    <div>
+        <strong>{{ profile.name }}</strong>
+        <p>{{ profile.class or 'Class unknown' }}</p>
+        <p>{{ profile.realm }} — {{ profile.region }}</p>
+    </div>
+</section>
+{% endif %}
 
-<h3 style="text-align:center;">
-    {{ realm }} ({{ region }})
-</h3>
-
-<table>
-    <tr>
-        <th>#</th>
-        <th>Dungeon</th>
-        <th>Key Level</th>
-        <th>Score</th>
-        <th>Completed</th>
-    </tr>
-
-    {% if runs|length == 0 %}
-    <tr>
-        <td colspan="5">No weekly runs found.</td>
-    </tr>
-    {% else %}
-    {% for run in runs %}
-    <tr>
-        <td>{{ loop.index }}</td>
-        <td>{{ run.dungeon }}</td>
-        <td class="lp">{{ run.level }}</td>
-        <td>{{ run.score }}</td>
-        <td>{{ run.time }}</td>
-    </tr>
-    {% endfor %}
-    {% endif %}
-
-</table>
-
-</body>
-</html>
+<section class="card leaderboard-card">
+    <div class="table-meta">
+        <h2>Recent Weekly Runs</h2>
+        <p>Most recent Mythic+ runs from the last seven days.</p>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Dungeon</th>
+                    <th>Key Level</th>
+                    <th>Score</th>
+                    <th>Completed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if runs|length == 0 %}
+                <tr>
+                    <td colspan="5">No weekly runs found.</td>
+                </tr>
+                {% else %}
+                {% for run in runs %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ run.dungeon }}</td>
+                    <td class="lp">{{ run.level }}</td>
+                    <td>{{ run.score }}</td>
+                    <td>{{ run.time }}</td>
+                </tr>
+                {% endfor %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

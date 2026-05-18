@@ -1,41 +1,47 @@
-<!doctype html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>My Flask Site</title>
-        <link
-            rel="stylesheet"
-            href="{{ url_for('static', filename='style.css') }}"
-        />
-    </head>
-    <body>
-        <header class="hero">
-            <h1>Welcome to the League & WoW Hub</h1>
-            <p>Explore leaderboards and player history with a fresh look.</p>
-        </header>
+{% extends 'base.html' %}
 
-        <nav>
-            <a href="{{ url_for('top300') }}">Top 300 LoL</a>
-            <a href="{{ url_for('player', region='us', realm='Stormrage', name='Owlpacíno') }}">
-                WoW Past Keys
-            </a>
-        </nav>
+{% block title %}League + WoW Dashboard{% endblock %}
 
-        <main class="container">
-            <section class="card">
-                <h2>League of Legends</h2>
-                <p>View the top 300 leaderboard for League of Legends and see the best players in action.</p>
-                <a class="button" href="{{ url_for('top300') }}">View Leaderboard</a>
-            </section>
+{% block content %}
+<section class="hero hero-large">
+    <div>
+        <p class="eyebrow">Game stats + mythic history</p>
+        <h1>League and WoW insights in one place</h1>
+        <p class="hero-copy">Explore the top-ranked League players and search World of Warcraft Mythic+ runs with a sleek, modern interface.</p>
+        <div class="hero-actions">
+            <a class="button button-primary" href="{{ url_for('top300') }}">View Top 300</a>
+            <a class="button button-secondary" href="{{ url_for('player', region='us', realm='Stormrage', name='Owlpacíno') }}">Demo WoW Lookup</a>
+        </div>
+    </div>
+</section>
 
-            <section class="card">
-                <h2>World of Warcraft</h2>
-                <p>Check out past Mythic+ keys for Owlpacíno on Stormrage, US.</p>
-                <a class="button" href="{{ url_for('player', region='us', realm='Stormrage', name='Owlpacíno') }}">
-                    View Player History
-                </a>
-            </section>
-        </main>
-    </body>
-</html>
+<section class="grid-layout">
+    <article class="feature-card">
+        <span class="feature-tag">League</span>
+        <h2>Dynamic solo queue leaderboard</h2>
+        <p>Pull live Riot data and compare the strongest challenger, grandmaster, and master players in one table.</p>
+        <a class="button button-primary" href="{{ url_for('top300') }}">Browse Leaderboard</a>
+    </article>
+
+    <article class="feature-card">
+        <span class="feature-tag">WoW</span>
+        <h2>Search Mythic+ runs</h2>
+        <p>Lookup any character by region, realm, and name to inspect recent weekly dungeon performance.</p>
+        <form action="{{ url_for('player_search') }}" method="get" class="search-form">
+            <div class="form-row">
+                <label for="region">Region</label>
+                <input id="region" name="region" value="{{ default_region }}" placeholder="us" />
+            </div>
+            <div class="form-row">
+                <label for="realm">Realm</label>
+                <input id="realm" name="realm" value="{{ default_realm }}" placeholder="Stormrage" />
+            </div>
+            <div class="form-row">
+                <label for="name">Character</label>
+                <input id="name" name="name" value="{{ default_name }}" placeholder="Owlpacíno" />
+            </div>
+            <button class="button button-secondary" type="submit">Search Player</button>
+        </form>
+    </article>
+</section>
+{% endblock %}

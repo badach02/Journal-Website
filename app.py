@@ -1,25 +1,35 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify, redirect, url_for
 from datetime import datetime, timedelta
 import requests
 import os
+import time
 
 app = Flask(__name__)
 
 API_KEY = os.getenv("RIOT_API_KEY")
 REGION = "na1"
 
-HEADERS = {"X-Riot-Token": API_KEY}
+HEADERS = {"X-Riot-Token": API_KEY} if API_KEY else {}
+
+DEFAULT_TIMEOUT = 7
+CACHE_TTL_SECONDS = 120
+CACHE = {}
+
+session = requests.Session()
 
 
 def fetch_league(url):
-    res = requests.get(url, headers=HEADERS)
-    return res.json().get("entries", [])
+    data = fetch_json(url, headers=HEADERS)
+    return data.get("entries", []) if isinstance(data, dict) else []
 
 
-def get_top_300():
-    challenger = fetch_league(f"https://{REGION}.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5")
-    grandmaster = fetch_league(f"https://{REGION}.api.riotgames.com/lol/league/v4/grandmasterleagues/by-queue/RANKED_SOLO_5x5")
-    master = fetch_league(f"https://{REGION}.api.riotgames.com/lol/league/v4/masterleagues/by-queue/RANKED_SOLO_5x5")
+def get_top_300(region=REGION):
+    if not API_KEY:
+        raise ValueError("RIOT_API_KEY is not configured")
+
+    challenger = fetch_league(f"https://{region}.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5")
+    grandmaster = fetch_league(f"https://{region}.api.riotgames.com/lol/league/v4/grandmasterleagues/by-queue/RANKED_SOLO_5x5")
+    master = fetch_league(f"https://{region}.api.riotgames.com/lol/league/v4/masterleagues/by-queue/RANKED_SOLO_5x5")
 
     all_players = challenger + grandmaster + master
     all_players.sort(key=lambda x: x.get("leaguePoints", 0), reverse=True)
@@ -27,20 +37,125 @@ def get_top_300():
     return all_players[:300]
 
 
+def make_cache_key(url, params=None):
+    if not params:
+        return url
+    items = sorted(params.items())
+    return f"{url}?{'&'.join([f'{k}={v}' for k, v in items])}"
+
+
+def fetch_json(url, params=None, headers=None):
+    cache_key = make_cache_key(url, params)
+    cached = CACHE.get(cache_key)
+    if cached and time.time() < cached['expires']:
+        return cached['value']
+
+    data = None
+    for attempt in range(2):
+        try:
+            response = session.get(url, params=params, headers=headers or {}, timeout=DEFAULT_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+            break
+        except requests.RequestException as exc:
+            app.logger.warning("External API request failed (%s): %s", attempt + 1, exc)
+            if attempt == 1:
+                raise
+            time.sleep(0.35)
+        except ValueError as exc:
+            app.logger.warning("Invalid JSON response from: %s", url)
+            raise
+
+    if data is None:
+        raise requests.RequestException("Unable to fetch JSON data")
+
+    CACHE[cache_key] = {'value': data, 'expires': time.time() + CACHE_TTL_SECONDS}
+    return data
+
+
+def format_time(timestamp):
+    if not timestamp:
+        return "Unknown"
+
+    try:
+        if timestamp.endswith("Z"):
+            timestamp = timestamp.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(timestamp)
+        return parsed.strftime("%b %d, %Y %H:%M UTC")
+    except ValueError:
+        return timestamp
+
+
+def normalize_value(value):
+    if not isinstance(value, str):
+        return ""
+    return value.strip()
+
+
+def not_found_error(message="Resource not found"):
+    return render_template("error.html", title="Not Found", message=message), 404
+
+
+def bad_request_error(message="Invalid request"):
+    return render_template("error.html", title="Invalid Request", message=message), 400
+
+
+def render_api_error(message, status=400):
+    return jsonify({"error": message}), status
+
+
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        default_region="us",
+        default_realm="Stormrage",
+        default_name="Owlpacíno",
+    )
 
 
 @app.route("/top300")
 def top300():
-    players = get_top_300()
-    return render_template("top300.html", players=players)
+    region = normalize_value(request.args.get("region", REGION)) or REGION
+    try:
+        players = get_top_300(region)
+    except ValueError as exc:
+        return bad_request_error(str(exc))
+    except requests.RequestException:
+        return bad_request_error("Unable to fetch top 300 players right now. Try again later.")
+
+    return render_template("top300.html", players=players, region=region)
+
+
+@app.route("/api/top300")
+def api_top300():
+    region = normalize_value(request.args.get("region", REGION)) or REGION
+    try:
+        players = get_top_300(region)
+    except ValueError as exc:
+        return render_api_error(str(exc), 500)
+    except requests.RequestException:
+        return render_api_error("Unable to fetch player data", 502)
+
+    return jsonify({"region": region, "players": players})
+
+
+@app.route("/player")
+def player_search():
+    region = normalize_value(request.args.get("region", "us"))
+    realm = normalize_value(request.args.get("realm", "Stormrage"))
+    name = normalize_value(request.args.get("name", "Owlpacíno"))
+
+    if not region or not realm or not name:
+        return bad_request_error("Please provide region, realm, and character name.")
+
+    return redirect(url_for("player", region=region, realm=realm, name=name))
 
 
 @app.route("/health")
 def health():
-    return {"status": "ok"}, 200
+    status = {"status": "ok", "riot_api_key_configured": bool(API_KEY)}
+    return jsonify(status), 200
 
 
 def get_weekly_runs(region, realm, name):
@@ -50,13 +165,21 @@ def get_weekly_runs(region, realm, name):
         "region": region,
         "realm": realm,
         "name": name,
-        "fields": "mythic_plus_recent_runs"
+        "fields": "mythic_plus_recent_runs,mythic_plus_scores"
     }
 
-    res = requests.get(url, params=params)
-    data = res.json()
+    data = fetch_json(url, params=params)
 
     runs = data.get("mythic_plus_recent_runs", [])
+    profile = {
+        "name": data.get("name", name),
+        "realm": data.get("realm", realm),
+        "region": data.get("region", region),
+        "class": data.get("class"),
+        "active_spec_name": data.get("active_spec_name"),
+        "score": data.get("mythic_plus_scores", {}).get("all", {}).get("score"),
+        "thumbnail_url": data.get("thumbnail_url"),
+    }
 
     one_week_ago = datetime.utcnow() - timedelta(days=7)
     filtered = []
@@ -66,30 +189,64 @@ def get_weekly_runs(region, realm, name):
         ts = r.get("completed_at") or r.get("timestamp")
 
         if ts:
-            run_time = datetime.fromisoformat(ts.replace("Z", ""))
+            try:
+                run_time = datetime.fromisoformat(ts.replace("Z", ""))
+            except ValueError:
+                run_time = None
 
-            if run_time > one_week_ago:
+            if run_time and run_time > one_week_ago:
                 filtered.append({
                     "dungeon": r.get("dungeon"),
                     "level": r.get("mythic_level"),
-                    "time": ts,
-                    "score": r.get("score", 0)
+                    "time": format_time(ts),
+                    "raw_time": ts,
+                    "score": r.get("score", 0),
                 })
 
-    return filtered
+    return profile, filtered
 
 
 @app.route("/player/<region>/<realm>/<name>")
 def player(region, realm, name):
-    runs = get_weekly_runs(region, realm, name)
+    region = normalize_value(region)
+    realm = normalize_value(realm)
+    name = normalize_value(name)
+
+    try:
+        profile, runs = get_weekly_runs(region, realm, name)
+    except requests.RequestException:
+        return bad_request_error("Unable to fetch player data at this time.")
+    except ValueError as exc:
+        return bad_request_error(str(exc))
 
     return render_template(
         "player.html",
+        profile=profile,
         name=name,
         realm=realm,
         region=region,
-        runs=runs
+        runs=runs,
     )
+
+
+@app.route("/api/player/<region>/<realm>/<name>")
+def api_player(region, realm, name):
+    try:
+        profile, runs = get_weekly_runs(region, realm, name)
+    except requests.RequestException:
+        return render_api_error("Unable to fetch player data", 502)
+
+    return jsonify({"profile": profile, "runs": runs})
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+    return render_template("error.html", title="Page Not Found", message="The requested page does not exist."), 404
+
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    return render_template("error.html", title="Server Error", message="An unexpected error occurred."), 500
 
 
 if __name__ == "__main__":

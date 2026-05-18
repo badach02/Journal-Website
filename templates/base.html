@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>{% block title %}League + WoW Dashboard{% endblock %}</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    </head>
+    <body>
+        <div class="page-shell">
+            <nav class="top-nav">
+                <a class="brand" href="{{ url_for('index') }}">League & WoW Hub</a>
+                <div class="nav-links">
+                    <a href="{{ url_for('top300') }}">Top 300 LoL</a>
+                    <a href="{{ url_for('player', region='us', realm='Stormrage', name='Owlpacíno') }}">WoW Lookup</a>
+                </div>
+            </nav>
+
+            <main class="page-content">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </body>
+</html>

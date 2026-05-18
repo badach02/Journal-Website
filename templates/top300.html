@@ -1,72 +1,60 @@
-<!doctype html>
-<html>
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='style.css') }}"
-    />
-    <head>
-        <title>Top 300 Ranked Players</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                background: #0f172a;
-                color: white;
-                margin: 0;
-                padding: 20px;
-            }
+{% extends 'base.html' %}
 
-            h1 {
-                text-align: center;
-            }
+{% block title %}Top 300 Ranked Players{% endblock %}
 
-            table {
-                width: 100%;
-                border-collapse: collapse;
-                margin-top: 20px;
-            }
+{% block content %}
+<section class="hero hero-compact">
+    <div>
+        <p class="eyebrow">LoL Leaderboard</p>
+        <h1>Top 300 Ranked Players</h1>
+        <p class="hero-copy">A clean Riot leaderboard view with tier, LP, and win rate across the highest ranks.</p>
+    </div>
+    <form action="{{ url_for('top300') }}" method="get" class="search-form search-inline">
+        <div class="form-row">
+            <label for="region">Region</label>
+            <input id="region" name="region" value="{{ region }}" placeholder="na1" />
+        </div>
+        <button class="button button-primary" type="submit">Reload</button>
+    </form>
+</section>
 
-            th,
-            td {
-                padding: 10px;
-                border-bottom: 1px solid #334155;
-                text-align: left;
-            }
-
-            th {
-                background: #1e293b;
-            }
-
-            tr:hover {
-                background: #1e293b;
-            }
-
-            .lp {
-                font-weight: bold;
-                color: #38bdf8;
-            }
-        </style>
-    </head>
-    <body>
-        <h1>🏆 Top 300 Ranked Players</h1>
-
+<section class="card leaderboard-card">
+    <div class="table-meta">
+        <p>Showing {{ players|length }} entries from the {{ region|upper }} region.</p>
+    </div>
+    <div class="table-wrapper">
         <table>
-            <tr>
-                <th>Rank</th>
-                <th>Summoner ID</th>
-                <th>League Points</th>
-                <th>Wins</th>
-                <th>Losses</th>
-            </tr>
-
-            {% for player in players %}
-            <tr>
-                <td>{{ loop.index }}</td>
-                <td>{{ player.summonerId }}</td>
-                <td class="lp">{{ player.leaguePoints }}</td>
-                <td>{{ player.wins }}</td>
-                <td>{{ player.losses }}</td>
-            </tr>
-            {% endfor %}
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Summoner</th>
+                    <th>Tier</th>
+                    <th>LP</th>
+                    <th>Wins</th>
+                    <th>Losses</th>
+                    <th>Win Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in players %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ player.summonerName or player.summonerId }}</td>
+                    <td>{{ player.tier or '—' }} {{ player.rank or '' }}</td>
+                    <td class="lp">{{ player.leaguePoints or 0 }}</td>
+                    <td>{{ player.wins or 0 }}</td>
+                    <td>{{ player.losses or 0 }}</td>
+                    <td>
+                        {% if player.wins is not none and player.losses is not none and (player.wins + player.losses) > 0 %}
+                            {{ ((player.wins / (player.wins + player.losses)) * 100) | round(1) }}%
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
         </table>
-    </body>
-</html>
+    </div>
+</section>
+{% endblock %}
