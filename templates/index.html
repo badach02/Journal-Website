@@ -1,5 +1,9 @@
 <!doctype html>
 <html>
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    />
     <head>
         <title>My Flask Site</title>
     </head>
@@ -9,7 +13,7 @@
 
         <p>view top 300 leaderboard for League of Legends:</p>
         <nav>
-            <a href="top300.html"> Go </a>
+            <a href="{{ url_for('top300') }}">Go</a>
         </nav>
     </body>
 </html>
