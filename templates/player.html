@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ name }} - Weekly Keys</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<nav>
+    <a href="/">Home</a>
+</nav>
+
+<h1>
+    {{ name | capitalize }} - Weekly Mythic+ Runs
+</h1>
+
+<h3 style="text-align:center;">
+    {{ realm }} ({{ region }})
+</h3>
+
+<table>
+    <tr>
+        <th>#</th>
+        <th>Dungeon</th>
+        <th>Key Level</th>
+        <th>Score</th>
+        <th>Completed</th>
+    </tr>
+
+    {% if runs|length == 0 %}
+    <tr>
+        <td colspan="5">No weekly runs found.</td>
+    </tr>
+    {% else %}
+    {% for run in runs %}
+    <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ run.dungeon }}</td>
+        <td class="lp">{{ run.level }}</td>
+        <td>{{ run.score }}</td>
+        <td>{{ run.time }}</td>
+    </tr>
+    {% endfor %}
+    {% endif %}
+
+</table>
+
+</body>
+</html>

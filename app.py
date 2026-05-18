@@ -1,4 +1,5 @@
 from flask import Flask, render_template
+from datetime import datetime, timedelta
 import requests
 import os
 
@@ -40,3 +41,56 @@ def top300():
 @app.route("/health")
 def health():
     return {"status": "ok"}, 200
+
+
+def get_weekly_runs(region, realm, name):
+    url = "https://raider.io/api/v1/characters/profile"
+
+    params = {
+        "region": region,
+        "realm": realm,
+        "name": name,
+        "fields": "mythic_plus_recent_runs"
+    }
+
+    res = requests.get(url, params=params)
+    data = res.json()
+
+    runs = data.get("mythic_plus_recent_runs", [])
+
+    one_week_ago = datetime.utcnow() - timedelta(days=7)
+    filtered = []
+
+    for r in runs:
+        # RaiderIO format example: "2024-01-01T12:34:56Z"
+        ts = r.get("completed_at") or r.get("timestamp")
+
+        if ts:
+            run_time = datetime.fromisoformat(ts.replace("Z", ""))
+
+            if run_time > one_week_ago:
+                filtered.append({
+                    "dungeon": r.get("dungeon"),
+                    "level": r.get("mythic_level"),
+                    "time": ts,
+                    "score": r.get("score", 0)
+                })
+
+    return filtered
+
+
+@app.route("/player/<region>/<realm>/<name>")
+def player(region, realm, name):
+    runs = get_weekly_runs(region, realm, name)
+
+    return render_template(
+        "player.html",
+        name=name,
+        realm=realm,
+        region=region,
+        runs=runs
+    )
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8000)

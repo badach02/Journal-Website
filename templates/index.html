@@ -1,19 +1,41 @@
 <!doctype html>
-<html>
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename='style.css') }}"
-    />
+<html lang="en">
     <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>My Flask Site</title>
+        <link
+            rel="stylesheet"
+            href="{{ url_for('static', filename='style.css') }}"
+        />
     </head>
     <body>
-        <h1>Hello from Flask</h1>
-        <p>ur a bitch.</p>
+        <header class="hero">
+            <h1>Welcome to the League & WoW Hub</h1>
+            <p>Explore leaderboards and player history with a fresh look.</p>
+        </header>
 
-        <p>view top 300 leaderboard for League of Legends:</p>
-        <p>
-            <a href="{{ url_for('top300') }}">Go</a>
-        </p>
+        <nav>
+            <a href="{{ url_for('top300') }}">Top 300 LoL</a>
+            <a href="{{ url_for('player', region='us', realm='Stormrage', name='Owlpacíno') }}">
+                WoW Past Keys
+            </a>
+        </nav>
+
+        <main class="container">
+            <section class="card">
+                <h2>League of Legends</h2>
+                <p>View the top 300 leaderboard for League of Legends and see the best players in action.</p>
+                <a class="button" href="{{ url_for('top300') }}">View Leaderboard</a>
+            </section>
+
+            <section class="card">
+                <h2>World of Warcraft</h2>
+                <p>Check out past Mythic+ keys for Owlpacíno on Stormrage, US.</p>
+                <a class="button" href="{{ url_for('player', region='us', realm='Stormrage', name='Owlpacíno') }}">
+                    View Player History
+                </a>
+            </section>
+        </main>
     </body>
 </html>
