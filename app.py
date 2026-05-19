@@ -3,8 +3,17 @@ from datetime import datetime, timedelta
 import requests
 import os
 import time
+import logging
+from dotenv import load_dotenv
+
+# Load environment variables from a local .env file if present (helps local dev)
+load_dotenv()
 
 app = Flask(__name__)
+
+# Configure basic logging so the server console shows API diagnostics
+logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
 
 API_KEY = os.getenv("RIOT_API_KEY")
 REGION = "na1"
@@ -17,7 +26,6 @@ CACHE = {}
 
 session = requests.Session()
 
-
 def fetch_league(url):
     data = fetch_json(url, headers=HEADERS)
     entries = data.get("entries", []) if isinstance(data, dict) else []
@@ -27,7 +35,14 @@ def fetch_league(url):
         if tier and not entry.get("tier"):
             entry["tier"] = tier
         if not entry.get("summonerName"):
-            entry["summonerName"] = entry.get("summonerId")
+            # Riot's response can vary depending on queue/team entries — try several fallbacks
+            entry["summonerName"] = (
+                entry.get("playerOrTeamName")
+                or entry.get("name")
+                or entry.get("displayName")
+                or entry.get("summonerId")
+                or entry.get("playerOrTeamId")
+            )
 
     return entries
 
@@ -62,12 +77,22 @@ def fetch_json(url, params=None, headers=None):
     data = None
     for attempt in range(2):
         try:
+            app.logger.info("External API request start: url=%s params=%s attempt=%d", url, params, attempt + 1)
+            start = time.time()
             response = session.get(url, params=params, headers=headers or {}, timeout=DEFAULT_TIMEOUT)
+            elapsed = time.time() - start
+            status = getattr(response, 'status_code', None)
+            app.logger.info("External API response: url=%s status=%s elapsed=%.3fs", url, status, elapsed)
+
+            if status == 429:
+                retry_after = response.headers.get('Retry-After')
+                app.logger.warning("Rate limited by Riot API (429) for %s; Retry-After=%s", url, retry_after)
+
             response.raise_for_status()
             data = response.json()
             break
         except requests.RequestException as exc:
-            app.logger.warning("External API request failed (%s): %s", attempt + 1, exc)
+            app.logger.warning("External API request failed (attempt %s) for url=%s params=%s: %s", attempt + 1, url, params, exc)
             if attempt == 1:
                 raise
             time.sleep(0.35)
@@ -293,4 +318,4 @@ def internal_server_error(error):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8000, debug=True)

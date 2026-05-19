@@ -1,4 +1,9 @@
-flask
+﻿flask
 gunicorn
+waitress
 requests
-datetime
+Flask-Limiter
+redis
+prometheus-client
+
+python-dotenv
