@@ -5,6 +5,7 @@ import os
 import time
 import logging
 from dotenv import load_dotenv
+import concurrent.futures
 
 # Load environment variables from a local .env file if present (helps local dev)
 load_dotenv()
@@ -23,8 +24,27 @@ HEADERS = {"X-Riot-Token": API_KEY} if API_KEY else {}
 DEFAULT_TIMEOUT = 7
 CACHE_TTL_SECONDS = 120
 CACHE = {}
+ROLE_CACHE_TTL_SECONDS = 60 * 60 * 24  # cache inferred roles for 24 hours
+ROLE_INFER_LIMIT = 100  # number of top players to infer roles for by default
 
 session = requests.Session()
+
+# Mapping from Riot region to platform routing for Match-V5
+PLATFORM_ROUTING = {
+    "na1": "americas",
+    "br1": "americas",
+    "la1": "americas",
+    "la2": "americas",
+    "oc1": "americas",
+    "kr": "asia",
+    "jp1": "asia",
+    "euw1": "europe",
+    "eun1": "europe",
+    "ru": "europe",
+}
+
+def platform_host_for_region(region):
+    return PLATFORM_ROUTING.get(region, "americas")
 
 def fetch_league(url):
     data = fetch_json(url, headers=HEADERS)
@@ -58,7 +78,24 @@ def get_top_300(region=REGION):
     all_players = challenger + grandmaster + master
     all_players.sort(key=lambda x: x.get("leaguePoints", 0), reverse=True)
 
-    return all_players[:300]
+    top = all_players[:300]
+
+    # Infer roles for the top N players (to show role distribution)
+    try:
+        # collect puuids for players missing a role
+        puuids = [p.get("puuid") for p in top[:ROLE_INFER_LIMIT] if p.get("puuid")]
+        if puuids:
+            roles_map = infer_roles_for_puuids(puuids, region=region, batch_size=10, pause=0.12)
+            for p in top:
+                puuid = p.get("puuid")
+                if puuid and roles_map.get(puuid):
+                    p["role"] = roles_map.get(puuid)
+                else:
+                    p["role"] = None
+    except Exception as exc:
+        app.logger.warning("Role inference failed: %s", exc)
+
+    return top
 
 
 def make_cache_key(url, params=None):
@@ -105,6 +142,128 @@ def fetch_json(url, params=None, headers=None):
 
     CACHE[cache_key] = {'value': data, 'expires': time.time() + CACHE_TTL_SECONDS}
     return data
+
+
+def fetch_match_ids_by_puuid(puuid, region=REGION, count=5):
+    """Return recent match ids for a puuid using Match-V5 (platform routing)."""
+    platform = platform_host_for_region(region)
+    url = f"https://{platform}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids"
+    params = {"start": 0, "count": count}
+    try:
+        data = fetch_json(url, params=params, headers=HEADERS)
+        return data if isinstance(data, list) else []
+    except requests.RequestException:
+        return []
+
+
+def fetch_match_by_id(match_id, region=REGION):
+    platform = platform_host_for_region(region)
+    url = f"https://{platform}.api.riotgames.com/lol/match/v5/matches/{match_id}"
+    try:
+        return fetch_json(url, headers=HEADERS)
+    except requests.RequestException:
+        return None
+
+
+def infer_role_from_participant(part):
+    """Infer simple role string from a match participant object.
+
+    Returns one of: 'Top','Jungle','Mid','ADC','Support' or None.
+    """
+    # Prefer teamPosition if present (newer schema)
+    tp = part.get("teamPosition") or part.get("teamPosition", None)
+    if tp:
+        mapping = {
+            "TOP": "Top",
+            "JUNGLE": "Jungle",
+            "MIDDLE": "Mid",
+            "MID": "Mid",
+            "BOTTOM": "ADC",
+            "UTILITY": "Support",
+        }
+        role = mapping.get(tp.upper()) if isinstance(tp, str) else None
+        if role:
+            return role
+
+    # Fallback to lane/role fields
+    lane = part.get("lane") or part.get("timeline", {}).get("lane")
+    role_field = part.get("role")
+    if lane:
+        l = lane.upper()
+        if l in ("TOP",):
+            return "Top"
+        if l in ("JUNGLE", "JNG"):
+            return "Jungle"
+        if l in ("MID", "MIDDLE"):
+            return "Mid"
+        if l in ("BOTTOM", "BOT"):
+            # distinguish adc/support by role_field if available
+            if role_field == "DUO_SUPPORT":
+                return "Support"
+            return "ADC"
+
+    if role_field:
+        rf = role_field.upper()
+        if rf == "DUO_SUPPORT":
+            return "Support"
+        if rf == "DUO_CARRY":
+            return "ADC"
+        if rf == "SOLO":
+            # Solo depends on lane, skip
+            return None
+
+    return None
+
+
+def infer_role_for_puuid(puuid, region=REGION, max_matches=5):
+    """Infer a player's primary role by scanning recent matches until we can determine a role."""
+    if not puuid:
+        return None
+
+    # Check cache first
+    url = f"role://{puuid}"
+    cached = CACHE.get(url)
+    if cached and time.time() < cached['expires']:
+        return cached['value']
+
+    match_ids = fetch_match_ids_by_puuid(puuid, region=region, count=max_matches)
+    for mid in match_ids:
+        match = fetch_match_by_id(mid, region=region)
+        if not match:
+            continue
+        # find participant matching puuid
+        info = match.get("info") or {}
+        participants = info.get("participants") or []
+        for part in participants:
+            if part.get("puuid") == puuid:
+                role = infer_role_from_participant(part)
+                if role:
+                    CACHE[url] = {'value': role, 'expires': time.time() + ROLE_CACHE_TTL_SECONDS}
+                    return role
+
+    # nothing found
+    CACHE[url] = {'value': None, 'expires': time.time() + ROLE_CACHE_TTL_SECONDS}
+    return None
+
+
+def infer_roles_for_puuids(puuids, region=REGION, batch_size=10, pause=0.12):
+    """Batch infer roles for multiple puuids concurrently; returns dict puuid->role."""
+    results = {}
+    remaining = [p for p in puuids if p]
+    for i in range(0, len(remaining), batch_size):
+        chunk = remaining[i : i + batch_size]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(chunk)) as ex:
+            future_map = {ex.submit(infer_role_for_puuid, puuid, region): puuid for puuid in chunk}
+            for fut in concurrent.futures.as_completed(future_map):
+                puuid = future_map[fut]
+                try:
+                    results[puuid] = fut.result()
+                except Exception as exc:
+                    app.logger.warning("Role inference failed for %s: %s", puuid, exc)
+                    results[puuid] = None
+        if i + batch_size < len(remaining):
+            time.sleep(pause)
+    return results
 
 
 def format_time(timestamp):
@@ -158,7 +317,18 @@ def top300():
     except requests.RequestException:
         return bad_request_error("Unable to fetch top 300 players right now. Try again later.")
 
-    return render_template("top300.html", players=players, region=region)
+    # Compute role distribution counts for display
+    role_keys = ["Top", "Jungle", "Mid", "ADC", "Support"]
+    role_counts = {k: 0 for k in role_keys}
+    unknown = 0
+    for p in players:
+        r = p.get("role")
+        if r in role_counts:
+            role_counts[r] += 1
+        else:
+            unknown += 1
+
+    return render_template("top300.html", players=players, region=region, role_counts=role_counts, role_unknown=unknown)
 
 
 @app.route("/api/top300")

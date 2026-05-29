@@ -21,6 +21,13 @@
 <section class="card leaderboard-card">
     <div class="table-meta">
         <p>Showing {{ players|length }} entries from the {{ region|upper }} region.</p>
+        <p>
+            Role distribution:
+            {% for role, count in role_counts.items() %}
+                <span class="role-badge role-{{ role|lower }}">{{ role }}: {{ count }}</span>
+            {% endfor %}
+            <span class="role-badge role-unknown">Unknown: {{ role_unknown }}</span>
+        </p>
     </div>
     <div class="table-wrapper">
         <table>
@@ -28,6 +35,7 @@
                 <tr>
                     <th>Rank</th>
                     <th>Summoner</th>
+                    <th>Role</th>
                     <th>Tier</th>
                     <th>LP</th>
                     <th>Wins</th>
@@ -40,6 +48,7 @@
                 <tr>
                     <td>{{ loop.index }}</td>
                     <td>{{ player.summonerName or player.summonerId }}</td>
+                    <td>{{ player.role or '—' }}</td>
                     <td>{{ player.tier or '—' }} {{ player.rank or '' }}</td>
                     <td class="lp">{{ player.leaguePoints or 0 }}</td>
                     <td>{{ player.wins or 0 }}</td>
